@@ -1,0 +1,29 @@
+[project]
+name = "pg-llm-wiki"
+version = "0.1.0"
+description = "LLM-assisted Obsidian wiki for PostgreSQL"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml",
+    "tomli-w",
+    "rich",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+]

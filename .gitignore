@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+.obsidian/
+
+# Large/local source checkouts
+sources/postgresql/upstream.git/
+sources/postgresql/worktrees/
+
+# Generated exports that can be recreated
+exports/
+
+# Optional local scratch
+tmp/
+
+# Local agent/tool credentials and caches
+.local/

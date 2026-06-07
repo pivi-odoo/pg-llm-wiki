@@ -1,0 +1,8 @@
+# Non-code sources such as articles, postmortems, talks, and papers.
+# Add entries here later.
+
+# Example:
+# [articles.example]
+# path = "sources/articles/example-postgres-postmortem.md"
+# type = "article"
+# topics = ["autovacuum", "bloat"]

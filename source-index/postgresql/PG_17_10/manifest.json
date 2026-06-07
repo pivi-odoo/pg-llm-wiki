@@ -1,0 +1,7 @@
+{
+  "version": "PG_17_10",
+  "git_ref": "REL_17_10",
+  "source_root": "/workspace/sources/postgresql/worktrees/PG_17_10",
+  "commit": "25c49f3a4a742ba283f5cc43cc7f1d361552e917",
+  "generated_at": "2026-06-23T11:44:01.337420+00:00"
+}

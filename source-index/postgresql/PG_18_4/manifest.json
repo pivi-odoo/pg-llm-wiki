@@ -1,0 +1,7 @@
+{
+  "version": "PG_18_4",
+  "git_ref": "REL_18_4",
+  "source_root": "/workspace/sources/postgresql/worktrees/PG_18_4",
+  "commit": "f5cc81719e6da4cbdb1f797c48b693e91018153a",
+  "generated_at": "2026-06-23T11:44:09.468926+00:00"
+}

@@ -1,0 +1,18 @@
+.git
+.venv
+__pycache__
+*.pyc
+
+# Do not bake huge PostgreSQL checkouts into the image.
+sources/postgresql/upstream.git
+sources/postgresql/worktrees
+
+# Local Claude credentials/cache.
+.local
+.claude
+CLAUDE.local.md
+
+# Local outputs
+exports
+reports
+tmp

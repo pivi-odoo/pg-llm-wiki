@@ -1,0 +1,51 @@
+# Subsystem classification rules shared across all PostgreSQL versions.
+# Rules are tested in order; the first prefix match wins.
+# Files with a stem containing a vacuum_stem_keyword map to "vacuum" if no
+# prefix rule matched first.
+[postgresql.subsystems]
+order = [
+    "parser", "analyzer", "rewriter", "planner", "executor",
+    "storage", "buffer-manager", "wal", "vacuum", "autovacuum",
+    "stats", "replication", "locking", "catalog", "extensions",
+    "tests", "docs", "other",
+]
+rules = [
+    {prefix = "src/backend/storage/buffer/", subsystem = "buffer-manager"},
+    {prefix = "src/backend/storage/lmgr/",   subsystem = "locking"},
+    {prefix = "src/backend/access/transam/",  subsystem = "wal"},
+    {prefix = "src/backend/postmaster/autovacuum",   subsystem = "autovacuum"},
+    {prefix = "src/backend/commands/vacuum",         subsystem = "vacuum"},
+    {prefix = "src/backend/access/heap/vacuumlazy",  subsystem = "vacuum"},
+    {prefix = "src/backend/parser/analyze.c",        subsystem = "analyzer"},
+    {prefix = "src/backend/parser/parse_",    subsystem = "analyzer"},
+    {prefix = "src/backend/parser/",          subsystem = "parser"},
+    {prefix = "src/backend/rewrite/",         subsystem = "rewriter"},
+    {prefix = "src/backend/optimizer/",       subsystem = "planner"},
+    {prefix = "src/backend/executor/",        subsystem = "executor"},
+    {prefix = "src/backend/storage/",         subsystem = "storage"},
+    {prefix = "src/backend/access/",          subsystem = "storage"},
+    {prefix = "src/backend/replication/",     subsystem = "replication"},
+    {prefix = "src/backend/catalog/",         subsystem = "catalog"},
+    {prefix = "src/backend/statistics/",      subsystem = "stats"},
+    {prefix = "src/test/",                    subsystem = "tests"},
+    {prefix = "contrib/",                     subsystem = "extensions"},
+    {prefix = "doc/",                         subsystem = "docs"},
+]
+
+[postgresql.PG_16_14]
+git_ref = "REL_16_14"
+worktree = "sources/postgresql/worktrees/PG_16_14"
+index = "source-index/postgresql/PG_16_14"
+status = "release"
+
+[postgresql.PG_17_10]
+git_ref = "REL_17_10"
+worktree = "sources/postgresql/worktrees/PG_17_10"
+index = "source-index/postgresql/PG_17_10"
+status = "release"
+
+[postgresql.PG_18_4]
+git_ref = "REL_18_4"
+worktree = "sources/postgresql/worktrees/PG_18_4"
+index = "source-index/postgresql/PG_18_4"
+status = "release"
