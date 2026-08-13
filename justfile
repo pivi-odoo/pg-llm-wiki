@@ -27,9 +27,10 @@ lint:
 fmt:
     uv run ruff format tools
 
-# Export compact LLM context
+# Export the wiki as a zip archive
 export:
-    uv run python tools/export_obsidian.py
+    mkdir -p exports
+    archive="exports/pg-llm-wiki-$(date +%Y%m%d-%H%M%S).zip"; zip -qr "$archive" wiki -x 'wiki/.*' 'wiki/.*/*' && echo "Created $archive"
 
 # Run basic checks
 check:
