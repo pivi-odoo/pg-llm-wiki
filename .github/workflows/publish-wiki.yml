@@ -1,0 +1,56 @@
+name: Publish wiki archive
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install just
+        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
+
+      - name: Export wiki
+        run: just export
+
+      - name: Collect release metadata
+        id: release
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(exports/pg-llm-wiki-*.zip)
+          if (( ${#archives[@]} != 1 )); then
+            echo "Expected one wiki archive, found ${#archives[@]}" >&2
+            exit 1
+          fi
+
+          archive="${archives[0]}"
+          filename="$(basename "$archive" .zip)"
+          timestamp="${filename#pg-llm-wiki-}"
+          short_sha="${GITHUB_SHA::7}"
+
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "tag=wiki-$timestamp-$short_sha" >> "$GITHUB_OUTPUT"
+          echo "title=Wiki export $timestamp ($short_sha)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          ARCHIVE: ${{ steps.release.outputs.archive }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+        run: |
+          gh release create "$RELEASE_TAG" "$ARCHIVE" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TITLE" \
+            --notes "Automated wiki export for commit \`$GITHUB_SHA\`." \
+            --latest
