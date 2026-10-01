@@ -12,7 +12,10 @@ source_files:
   - src/include/access/toast_internals.h
 symbols:
   - numeric_add
-  - uuid_generate_v4
+  - gen_random_uuid
+  - uuidv7
+  - generate_uuidv7
+  - get_real_time_ns_ascending
   - heap_toast_insert_or_update
   - TOAST_MAX_CHUNK_SIZE
   - varattrib_1b
@@ -22,22 +25,35 @@ symbols:
 
 UUID (16 bytes) is twice the physical size of `bigint` (8 bytes). This difference compounds across every index that references the column: foreign key indexes, covering indexes, and the primary key index itself all double in size when switching from `bigint` to UUID.
 
-The more damaging issue with UUIDv4 is access pattern. `uuid_generate_v4()` produces uniformly random values. Every insert lands at a random position in the B-tree. PostgreSQL must then read pages that are not in `shared_buffers` from disk before the insert can proceed. At high insert rates this causes:
+The more damaging issue with UUIDv4 is access pattern. `gen_random_uuid()` (or `uuid_generate_v4()` from `uuid-ossp`) produces uniformly random values. Every insert lands at a random position in the B-tree. PostgreSQL must then read pages that are not in `shared_buffers` from disk before the insert can proceed. At high insert rates this causes:
 
 - **Index bloat**: B-tree pages fill only partially because splits happen before pages are logically "full" in a sequential sense. This leaves pages at ~50–70% fill on average.
 - **Cache thrashing**: the working set of hot index pages becomes the entire index rather than the right-most leaf. This evicts other useful data from `shared_buffers`.
 
-Sequential UUID variants (UUIDv7, ULIDs) embed a millisecond-precision timestamp in the high bits. This makes the sort order monotonically increasing. Insert behaviour then matches `bigserial`: appends go to the rightmost page, and that page stays hot in cache. The storage overhead (16 vs 8 bytes) remains.
+Sequential UUID variants (UUIDv7, ULIDs) embed a millisecond-precision timestamp in the high bits. This makes the sort order roughly increasing. Insert behaviour then approaches `bigserial`: appends go to the rightmost page, and that page stays hot in cache. The storage overhead (16 vs 8 bytes) remains.
 
-**When UUIDs are worth it**: distributed systems that generate IDs across multiple nodes without coordination, or when exposing IDs in APIs where exposing sequential integers leaks enumeration information. In those cases, prefer UUIDv7 over v4 to recover the sequential-insert property.
+### Native uuidv7()
+
+PostgreSQL 18 adds a built-in `uuidv7()` (`src/backend/utils/adt/uuid.c`). Earlier versions need an extension or application-side generation. The layout follows RFC 9562:
+
+- The first 48 bits hold the Unix timestamp in milliseconds.
+- The next 12 bits (`rand_a`) hold a sub-millisecond fraction of 1/4096 ms, taken from the nanosecond clock (RFC 9562 "Method 3").
+- The remaining bits, 62 apart from version and variant, come from `pg_strong_random()`.
+
+`get_real_time_ns_ascending()` keeps a per-backend previous timestamp and forces each new value to advance by a minimum step. IDs from one backend are therefore strictly increasing, even within the same millisecond. IDs from different backends or servers are only ordered to the precision of their clocks, so concurrent writers interleave near the right edge of the index. On macOS and Windows the clock has only microsecond precision, so the two lowest sub-millisecond bits are filled with random bits.
+
+`uuidv7(interval)` shifts the embedded timestamp, which helps when generating test data or backfilling. `uuid_extract_timestamp()` reads the timestamp back from a v7 value. The embedded timestamp reveals row creation time to anyone who sees the ID.
+
+**When UUIDs are worth it**: distributed systems that generate IDs across multiple nodes without coordination, or when exposing IDs in APIs where exposing sequential integers leaks enumeration information. In those cases, prefer UUIDv7 over v4 to recover the sequential-insert property. Keep v4 when the creation time must stay hidden or the ID must be unguessable.
 
 ```sql
 -- bigserial: 8 bytes, sequential, single-node only
 CREATE TABLE orders (id bigserial PRIMARY KEY, ...);
 
--- UUIDv7: 16 bytes, sequential, globally unique
-CREATE TABLE orders (id uuid DEFAULT gen_random_uuid() PRIMARY KEY, ...);
--- gen_random_uuid() is v4; use pg_uuidv7 extension for v7
+-- UUIDv7: 16 bytes, roughly sequential, globally unique
+CREATE TABLE orders (id uuid DEFAULT uuidv7() PRIMARY KEY, ...);
+-- uuidv7() is built in from PostgreSQL 18; older versions need an extension
+-- gen_random_uuid() produces v4 (random) and gives the bloat described above
 ```
 
 ## text vs varchar(n) vs char(n)
