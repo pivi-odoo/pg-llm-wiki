@@ -115,7 +115,7 @@ Decoding requires `wal_level = logical` because at lower levels the WAL omits th
 Logical replication deliberately excludes several categories of change that either cannot be decoded from WAL or whose semantics do not transfer cleanly across independent catalog namespaces:
 
 - **Logical replication does not replicate DDL.** An operator must apply schema changes manually or via a separate tooling layer. The subscriber's table structure must match (or be compatible with) the publisher's at the time changes arrive.
-- **Logical replication does not replicate sequences.** WAL tracks sequence values as [[subsystems/transactions/hint-bits|hint bits]], not logical operations. The concepts of "next value" differ between independent sequences.
+- **Logical replication does not stream sequence changes.** Sequence updates are WAL-logged (`XLOG_SEQ_LOG`), but the decoder ignores them, so `NEXTVAL` calls never reach the subscriber. PostgreSQL 19 adds on-demand synchronization of sequence values (`ALTER SUBSCRIPTION ... REFRESH SEQUENCES`, `sequencesync.c`). Earlier versions need a manual `SETVAL` on the subscriber.
 - **Logical replication does not replicate large objects.** `FOR ALL TABLES` publications exclude the `pg_largeobject` system table.
 - **Logical replication excludes temporary and unlogged tables.** Temporary tables are session-local. Unlogged tables intentionally skip WAL.
 - **Not all data types work with all output plugins.** pgoutput's binary protocol handles all built-in types, but custom plugins using text format may struggle with types lacking a stable text representation.

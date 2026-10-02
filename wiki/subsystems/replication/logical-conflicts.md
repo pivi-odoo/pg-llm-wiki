@@ -237,7 +237,7 @@ For manual writes that should not be re-published (e.g., migration tooling repla
 
 ## Sequences Are Not Replicated
 
-Logical replication does not replicate sequences, including those backing `serial` and `IDENTITY` columns. This is documented behavior (`doc/src/sgml/logical-replication.sgml`): sequence data does not flow across a replication subscription. Initial table sync populates the subscriber's sequences based on the sequence state at sync time. Replication never updates them again.
+Logical replication does not stream sequence changes, including those of sequences backing `serial` and `IDENTITY` columns. This is documented behavior (`doc/src/sgml/logical-replication.sgml`). Table sync copies rows but does not advance the subscriber's sequences. Through PostgreSQL 18, nothing updates them again. PostgreSQL 19 adds on-demand synchronization (`ALTER SUBSCRIPTION ... REFRESH SEQUENCES`), which copies the publisher's current values but does not run continuously.
 
 This creates a structural conflict source after failover. During normal operation the publisher's sequence advances with each INSERT. The subscriber accumulates rows whose ID values came from the publisher's advancing sequence. The subscriber's own sequence, however, never advances to match. When the subscriber is promoted and applications begin writing to it, `nextval` produces IDs that collide with rows the former publisher already inserted. This generates INSERT conflicts on any new subscribers of the newly promoted primary.
 

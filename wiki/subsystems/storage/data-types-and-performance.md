@@ -108,9 +108,11 @@ WHERE created_at >= '2024-01-01' AND created_at < '2024-01-02'
 
 On modern 64-bit hardware, arithmetic on `int4` (4 bytes) and `int8` (8 bytes) is equally fast — both complete in a single cycle. The difference is index page density.
 
-A B-tree leaf page is 8 kB by default. With a 4-byte key, roughly twice as many entries fit per page compared to an 8-byte key. For a high-cardinality join key (foreign keys, lookup columns), halving the key size roughly doubles the number of index entries that fit in `shared_buffers`. This improves cache hit rates under concurrent access.
+Every B-tree index entry starts with an 8-byte `IndexTupleData` header, and `index_form_tuple()` pads the whole entry to `MAXALIGN` (8 bytes on 64-bit platforms). A single-column `int4` entry is 8 + 4 rounded up to 16 bytes. A single-column `int8` entry is 8 + 8 = 16 bytes. Primary key indexes and single-column foreign key indexes therefore hold the same number of entries per 8 kB page for both types.
 
-Use `int8`/`bigserial` for primary keys on any table expected to exceed ~2 billion rows (the `int4` max is 2,147,483,647). For all other integer columns, `int4` is fine and marginally more cache-efficient.
+The saving appears in the heap, where each `int4` column is 4 bytes smaller (subject to alignment padding). It also appears in multi-column indexes. A two-column `int4` index entry is 8 + 8 = 16 bytes, and a two-column `int8` entry is 8 + 16 = 24 bytes, so such indexes grow by about half.
+
+Use `int8`/`bigserial` for primary keys on any table expected to exceed ~2 billion rows (the `int4` max is 2,147,483,647). For all other integer columns, `int4` is fine and saves heap space.
 
 ## TOAST and Wide Columns
 

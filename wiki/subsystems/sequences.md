@@ -112,13 +112,13 @@ if (maxv >= 0 && next > maxv - incby) {
 }
 ```
 
-With `CYCLE`, the sequence wraps silently; without it, the next `NEXTVAL` after the last valid value raises `ERRCODE_SEQUENCE_GENERATOR_LIMIT_EXCEEDED`. The default for `bigint` sequences (the type underlying `BIGSERIAL` and `GENERATED AS IDENTITY`) has `MAXVALUE 9223372036854775807`, so exhaustion is not a practical concern in most applications. This contrasts with `integer` sequences, whose range tops out at roughly 2.1 billion.
+With `CYCLE`, the sequence wraps silently; without it, the next `NEXTVAL` after the last valid value raises `ERRCODE_SEQUENCE_GENERATOR_LIMIT_EXCEEDED`. The default `MAXVALUE` follows the sequence type. A `bigint` sequence (the default for `CREATE SEQUENCE` and the type behind `BIGSERIAL`) tops out at 9223372036854775807, so exhaustion is not a practical concern in most applications. An `integer` sequence tops out at roughly 2.1 billion. The sequence behind an identity column takes the type of the column (`smallint`, `integer`, or `bigint`, checked in `init_params()`), and `SERIAL` creates an `integer` sequence. Only `BIGSERIAL` and `bigint` identity columns get the 64-bit range.
 
 ## Locking
 
 Sequence operations use two layers of locking:
 
-- **Relation-level lock.** `init_sequence()` acquires a `SequenceLock` (effectively `AccessShareLock`) via the lock manager. The backend caches this lock per transaction after the first access, which is why the lock manager is not consulted on every `NEXTVAL` call once the cache is warm.
+- **Relation-level lock.** `init_sequence()` acquires a `RowExclusiveLock` on the sequence relation via the lock manager (`lock_and_open_sequence()`). The lock conflicts with the `AccessExclusiveLock` taken by `ALTER SEQUENCE` and `DROP SEQUENCE`, but not with other `NEXTVAL` callers. The backend caches this lock per transaction after the first access, which is why the lock manager is not consulted on every `NEXTVAL` call once the cache is warm.
 - **Buffer-level lock.** The actual read-modify-write of the sequence tuple holds an exclusive buffer content lock for the duration of the critical section in `nextval_internal()`. This is a lightweight [[subsystems/locking/lwlocks|LWLock]], not a heavyweight lock, so contention on a hot sequence shows up as spinlock or LWLock wait time rather than in `pg_locks`.
 
 `SETVAL` follows the same locking path as `nextval_internal()` but also sets `log_cnt = 0`, forcing the next `NEXTVAL` to write a fresh WAL record immediately.
