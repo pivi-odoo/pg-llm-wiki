@@ -228,29 +228,36 @@ CREATE INDEX ON users (email_lower);
 
 ## Large CTE Used Multiple Times (Optimization Fences)
 
-**Why it hurts:** Before PostgreSQL 12, every CTE was always materialised — computed once, stored in a tuplestore, and scanned from there on each reference. This was an intentional optimization fence that prevented the planner from pushing predicates into the CTE. Post-PG12, the planner inlines non-recursive, non-volatile CTEs by default (`NOT MATERIALIZED`). However, if the CTE is referenced multiple times and is expensive, inlining causes it to be re-evaluated on each reference. That can be worse than the old materialise-once behaviour.
+**Why it hurts:** Under the default policy, the planner inlines a non-recursive, side-effect-free CTE only when the query references it exactly once. A CTE referenced two or more times is materialised once into a tuplestore, and each reference scans that stored result (`SS_process_ctes()`, `src/backend/optimizer/plan/subselect.c:939`). PostgreSQL 12 changed only the single-reference case. Multi-reference CTEs behave as they did before. [[subsystems/planner/ctes|CTEs in the Planner]] gives the full inlining rule.
+
+Without `NOT MATERIALIZED`, the CTE body therefore never runs once per reference. Two real hazards remain:
+
+- **Forcing `NOT MATERIALIZED` on a multi-reference CTE duplicates its work.** The planner copies the CTE body into every reference site as a separate subquery. An expensive aggregation referenced twice then runs twice.
+- **A materialised multi-reference CTE is an optimisation fence.** The planner cannot push outer predicates into the CTE body, so the body computes every row before any outer filter applies. The tuplestore holds rows in memory up to [[subsystems/executor/work-mem-and-spill|work_mem]] and then spills to a temporary file (`ExecInitCteScan()`, `src/backend/executor/nodeCtescan.c:235`).
 
 ```sql
--- pre-PG12 fence pattern that now inlines (may re-execute N times)
+-- default: referenced twice, so materialised once and scanned twice
 WITH expensive AS (
     SELECT ... FROM large_table WHERE complex_condition
 )
 SELECT * FROM expensive e1 JOIN expensive e2 ON ...;
+-- outer predicates cannot reach large_table; the full result is stored first
 
--- explicit materialisation: compute once, reuse
-WITH expensive AS MATERIALIZED (
+-- NOT MATERIALIZED: each reference becomes its own subquery
+WITH expensive AS NOT MATERIALIZED (
     SELECT ... FROM large_table WHERE complex_condition
 )
 SELECT * FROM expensive e1 JOIN expensive e2 ON ...;
+-- the body runs once per reference, but each copy can use outer predicates and indexes
 
--- if used only once and selectivity is high, let it inline (default)
+-- referenced once: inlined by default, so outer predicates push down
 WITH recent AS (
     SELECT id FROM orders WHERE created_at > now() - interval '1 day'
 )
 SELECT * FROM shipments WHERE order_id IN (SELECT id FROM recent);
 ```
 
-The decision rule: use `MATERIALIZED` when the CTE is referenced more than once and the scan cost dominates predicate pushdown benefit. Use `NOT MATERIALIZED` (or let the planner decide) when used once and push-down of outer predicates improves row estimates.
+The decision rule: keep the default for a multi-reference CTE when its body is expensive and the outer query reads most of its rows. Use `NOT MATERIALIZED` only when each reference applies a selective predicate that can use an index inside the body, and the duplicated work costs less than storing the full result. Use `MATERIALIZED` on a singly-referenced CTE only when you want a deliberate fence. `EXPLAIN` shows the outcome: a `CTE Scan` node means the CTE was materialised.
 
 ---
 
